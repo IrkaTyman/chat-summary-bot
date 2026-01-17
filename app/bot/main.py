@@ -8,7 +8,7 @@ from app.bot.handlers.help import router as help_router
 from app.bot.handlers.summary import router as summary_router
 from app.services.telegram_reader import TelegramReader
 from app.db.session import make_engine, make_session_factory
-
+from app.bot.handlers.subscribe import router as subscribe_router
 
 async def main() -> None:
     logging.basicConfig(
@@ -30,6 +30,7 @@ async def main() -> None:
 
     dp.include_router(help_router)
     dp.include_router(summary_router)
+    dp.include_router(subscribe_router)
 
     try:
         await dp.start_polling(bot, drop_pending_updates=True)

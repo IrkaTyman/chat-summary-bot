@@ -55,3 +55,9 @@ class TelegramReader:
                 text = "[пост без текста]"
             posts.append(Post(id=m.id, text=text))
         return posts
+    
+    async def resolve_channel_id(self, channel_identifier: str) -> int:
+        ident = normalize_channel_identifier(channel_identifier)
+        entity = await self._client.get_entity(ident)
+        return int(entity.id)
+
