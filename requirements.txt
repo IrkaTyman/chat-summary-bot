@@ -11,9 +11,15 @@ idna==3.11
 magic-filter==1.0.12
 multidict==6.7.0
 propcache==0.4.1
+pyaes==1.6.1
+pyasn1==0.6.2
 pydantic==2.12.5
 pydantic_core==2.41.5
+pypng==0.20220715.0
 python-dotenv==1.2.1
+qrcode==7.4.2
+rsa==4.9.1
+Telethon==1.42.0
 typing-inspection==0.4.2
 typing_extensions==4.15.0
 yarl==1.22.0

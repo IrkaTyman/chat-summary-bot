@@ -5,6 +5,8 @@ from aiogram import Bot, Dispatcher
 
 from app.config import load_config
 from app.bot.handlers.help import router as help_router
+from app.bot.handlers.summary import router as summary_router
+from app.services.telegram_reader import TelegramReader
 
 
 async def main() -> None:
@@ -17,10 +19,17 @@ async def main() -> None:
     bot = Bot(token=config.bot_token)
     dp = Dispatcher()
 
-    dp.include_router(help_router)
+    tg_reader = TelegramReader(config.tg_api_id, config.tg_api_hash, config.tg_session_name)
+    await tg_reader.start()
+    dp["tg_reader"] = tg_reader
 
-    # Важно: drop_pending_updates=True, чтобы не разгребать старые апдейты
-    await dp.start_polling(bot, drop_pending_updates=True)
+    dp.include_router(help_router)
+    dp.include_router(summary_router)
+
+    try:
+        await dp.start_polling(bot, drop_pending_updates=True)
+    finally:
+       await tg_reader.close()
 
 
 if __name__ == "__main__":
