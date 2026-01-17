@@ -71,3 +71,12 @@ class SubscriptionRepo:
             .order_by(Subscription.created_at.asc())
         )
         return list(res)
+
+    @staticmethod
+    async def get_subscription_by_id(session: AsyncSession, telegram_user_id: int, sub_id: int) -> Subscription | None:
+        return await session.scalar(
+            select(Subscription).where(
+                Subscription.id == sub_id,
+                Subscription.telegram_user_id == telegram_user_id,
+            )
+        )

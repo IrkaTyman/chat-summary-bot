@@ -8,6 +8,10 @@ from app.services.telegram_reader import TelegramReader, normalize_channel_ident
 from app.services.summarizer import SummarizerStub
 from app.services.telethon_errors import humanize_telethon_error
 import logging
+from app.db.di import SessionFactory
+from app.db.repositories.subscriptions import SubscriptionRepo
+from app.bot.keyboards.pick_channel import pick_channel_kb, PickChannelCallback
+from app.bot.keyboards.choose_n_sub import choose_n_sub_kb, ChooseNSubCallback
 
 logger = logging.getLogger(__name__)
 
@@ -58,11 +62,20 @@ async def _run_mode(message: Message, mode: str, channel: str, n: int, tg_reader
 
 
 @router.message(Command("summary"))
-async def cmd_summary(message: Message, tg_reader: TelegramReader) -> None:
+async def cmd_summary(message: Message, tg_reader: TelegramReader, db_session_factory: SessionFactory) -> None:
     channel, n, n_was_provided = _parse_args(message.text)
 
+    
     if not channel:
-        await message.answer("Формат: /summary <channelNick/channelUrl> <n>\nПример: /summary @durov 10")
+        # показать список сохранённых каналов
+        async with db_session_factory() as session:
+            subs = await SubscriptionRepo.list_subscriptions(session, message.from_user.id)
+
+        if not subs:
+            await message.answer("У вас нет сохранённых каналов. Добавьте: /subscribe @channel")
+            return
+
+        await message.answer("Выберите канал для саммари:", reply_markup=pick_channel_kb("summary", subs))
         return
 
     if not n:
@@ -80,11 +93,18 @@ async def cmd_summary(message: Message, tg_reader: TelegramReader) -> None:
 
 
 @router.message(Command("themes"))
-async def cmd_themes(message: Message, tg_reader: TelegramReader) -> None:
+async def cmd_themes(message: Message, tg_reader: TelegramReader, db_session_factory: SessionFactory) -> None:
     channel, n, n_was_provided = _parse_args(message.text)
 
     if not channel:
-        await message.answer("Формат: /themes <channelNick/channelUrl> <n>\nПример: /themes @durov 10")
+        async with db_session_factory() as session:
+            subs = await SubscriptionRepo.list_subscriptions(session, message.from_user.id)
+
+        if not subs:
+            await message.answer("У вас нет сохранённых каналов. Добавьте: /subscribe @channel")
+            return
+
+        await message.answer("Выберите канал для тем:", reply_markup=pick_channel_kb("themes", subs))
         return
 
     if not n:
@@ -109,4 +129,55 @@ async def on_choose_n_callback(
 ) -> None:
     # call.message is Message
     await _run_mode(call.message, callback_data.mode, callback_data.channel, callback_data.n, tg_reader)
+    await call.answer()
+
+@router.callback_query(PickChannelCallback.filter())
+async def on_pick_channel_callback(
+    call: CallbackQuery,
+    callback_data: PickChannelCallback,
+    db_session_factory: SessionFactory,
+) -> None:
+    if callback_data.mode == "cancel":
+        await call.answer("Отменено")
+        return
+
+    user_id = call.from_user.id
+    async with db_session_factory() as session:
+        sub = await SubscriptionRepo.get_subscription_by_id(session, user_id, callback_data.sub_id)
+
+    if not sub:
+        await call.answer("Подписка не найдена", show_alert=True)
+        return
+
+    ident = sub.channel_identifier
+    if not ident.startswith("@"):
+        ident_show = "@" + ident
+    else:
+        ident_show = ident
+
+    await call.message.answer(
+        f"Выберите количество последних постов для {ident_show}:",
+        reply_markup=choose_n_sub_kb(callback_data.mode, sub.id),
+    )
+    await call.answer()
+
+@router.callback_query(ChooseNSubCallback.filter())
+async def on_choose_n_sub_callback(
+    call: CallbackQuery,
+    callback_data: ChooseNSubCallback,
+    tg_reader: TelegramReader,
+    db_session_factory: SessionFactory,
+) -> None:
+    user_id = call.from_user.id
+    async with db_session_factory() as session:
+        sub = await SubscriptionRepo.get_subscription_by_id(session, user_id, callback_data.sub_id)
+
+    if not sub:
+        await call.answer("Подписка не найдена", show_alert=True)
+        return
+
+    # sub.channel_identifier хранится нормализованным (обычно без @)
+    channel = sub.channel_identifier
+
+    await _run_mode(call.message, callback_data.mode, channel, callback_data.n, tg_reader)
     await call.answer()
