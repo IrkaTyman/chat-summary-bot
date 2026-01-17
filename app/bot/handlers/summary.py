@@ -12,6 +12,7 @@ from app.db.di import SessionFactory
 from app.db.repositories.subscriptions import SubscriptionRepo
 from app.bot.keyboards.pick_channel import pick_channel_kb, PickChannelCallback
 from app.bot.keyboards.choose_n_sub import choose_n_sub_kb, ChooseNSubCallback
+from app.bot.utils.tg import safe_delete
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +128,7 @@ async def on_choose_n_callback(
     callback_data: ChooseNCallback,
     tg_reader: TelegramReader,
 ) -> None:
-    # call.message is Message
+    await safe_delete(call.message)  # удаляем сообщение с кнопками
     await _run_mode(call.message, callback_data.mode, callback_data.channel, callback_data.n, tg_reader)
     await call.answer()
 
@@ -146,7 +147,8 @@ async def on_pick_channel_callback(
         sub = await SubscriptionRepo.get_subscription_by_id(session, user_id, callback_data.sub_id)
 
     if not sub:
-        await call.answer("Подписка не найдена", show_alert=True)
+        await safe_delete(call.message)   # удаляем меню
+        await call.answer("Отменено")
         return
 
     ident = sub.channel_identifier
@@ -155,7 +157,9 @@ async def on_pick_channel_callback(
     else:
         ident_show = ident
 
-    await call.message.answer(
+    await safe_delete(call.message)       # удаляем сообщение со списком каналов
+
+    await call.message.answer(            # отправляем новое сообщение с выбором N
         f"Выберите количество последних постов для {ident_show}:",
         reply_markup=choose_n_sub_kb(callback_data.mode, sub.id),
     )
@@ -178,6 +182,8 @@ async def on_choose_n_sub_callback(
 
     # sub.channel_identifier хранится нормализованным (обычно без @)
     channel = sub.channel_identifier
+
+    await safe_delete(call.message)  # удаляем сообщение с кнопками 10/20/50
 
     await _run_mode(call.message, callback_data.mode, channel, callback_data.n, tg_reader)
     await call.answer()
