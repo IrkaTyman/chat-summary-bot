@@ -62,3 +62,12 @@ class SubscriptionRepo:
         )
         # rowcount может быть None в некоторых драйверах, но в asyncpg обычно ок
         return bool(res.rowcount)
+    
+    @staticmethod
+    async def list_subscriptions(session: AsyncSession, telegram_user_id: int) -> list[Subscription]:
+        res = await session.scalars(
+            select(Subscription)
+            .where(Subscription.telegram_user_id == telegram_user_id)
+            .order_by(Subscription.created_at.asc())
+        )
+        return list(res)
