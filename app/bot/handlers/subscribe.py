@@ -5,7 +5,10 @@ from aiogram.types import Message
 from app.db.di import SessionFactory
 from app.db.repositories.subscriptions import SubscriptionRepo
 from app.services.telegram_reader import TelegramReader, normalize_channel_identifier
+from app.services.telethon_errors import humanize_telethon_error
+import logging
 
+logger = logging.getLogger(__name__)
 router = Router()
 
 MAX_SUBSCRIPTIONS = 10
@@ -30,8 +33,9 @@ async def cmd_subscribe(message: Message, tg_reader: TelegramReader, db_session_
     # 1) резолвим канал через Telethon (валидируем что существует/доступен)
     try:
         channel_id = await tg_reader.resolve_channel_id(channel)
-    except Exception:
-        await message.answer("Не получилось получить доступ к каналу. Проверьте ссылку/ник и что аккаунт Telethon видит канал.")
+    except Exception as e:
+        logger.exception("Telethon error resolve channel=%s", channel)
+        await message.answer(humanize_telethon_error(e))
         return
 
     user_id = message.from_user.id
@@ -61,10 +65,11 @@ async def cmd_unsubscribe(message: Message, tg_reader: TelegramReader, db_sessio
 
     try:
         channel_id = await tg_reader.resolve_channel_id(channel)
-    except Exception:
-        await message.answer("Не получилось распознать канал. Проверьте ссылку/ник.")
+    except Exception as e:
+        logger.exception("Telethon error resolve channel=%s", channel)
+        await message.answer(humanize_telethon_error(e))
         return
-
+        
     user_id = message.from_user.id
 
     async with db_session_factory() as session:
